@@ -1,0 +1,28 @@
+{
+  "Items": [
+    {
+      "ID": "WPN_REVOLVER",
+      "Nombre": "Revólver Viejo",
+      "Categoria": 0, 
+      "SlotRequerido": 1, 
+      "AtributoUso": "Destreza",
+      "ValorEfecto": 4
+    },
+    {
+      "ID": "UTL_AMULETO",
+      "Nombre": "Amuleto Antiguo",
+      "Categoria": 2,
+      "SlotRequerido": 2,
+      "AtributoUso": "Arcano",
+      "ValorEfecto": 1
+    },
+    {
+      "ID": "KEY_PLANOS",
+      "Nombre": "Planos Robados",
+      "Categoria": 2,
+      "SlotRequerido": 2,
+      "AtributoUso": "Inteligencia",
+      "ValorEfecto": 0
+    }
+  ]
+}

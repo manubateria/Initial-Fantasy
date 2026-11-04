@@ -1,0 +1,44 @@
+{
+  "Plantillas": [
+    {
+      "NombrePlantilla": "Investigador Ocultista",
+      "VidaBase": 12,
+      "AtributosIniciales": [
+        { "NombreAtributo": "Arcano", "CarasDado": 10 },
+        { "NombreAtributo": "Destreza", "CarasDado": 8 },
+        { "NombreAtributo": "Fuerza", "CarasDado": 4 },
+        { "NombreAtributo": "Inteligencia", "CarasDado": 6 }
+      ]
+    },
+    {
+      "NombrePlantilla": "Investigador Maton",
+      "VidaBase": 21,
+      "AtributosIniciales": [
+        { "NombreAtributo": "Arcano", "CarasDado": 6 },
+        { "NombreAtributo": "Destreza", "CarasDado": 4 },
+        { "NombreAtributo": "Fuerza", "CarasDado": 10 },
+        { "NombreAtributo": "Inteligencia", "CarasDado": 8 }
+      ]
+    },
+    {
+      "NombrePlantilla": "Investigador Ladron",
+      "VidaBase": 18,
+      "AtributosIniciales": [
+        { "NombreAtributo": "Arcano", "CarasDado": 6 },
+        { "NombreAtributo": "Destreza", "CarasDado": 10 },
+        { "NombreAtributo": "Fuerza", "CarasDado": 4 },
+        { "NombreAtributo": "Inteligencia", "CarasDado": 8 }
+      ]
+    },
+    {
+      "NombrePlantilla": "Investigador Bibliotecario",
+      "VidaBase": 15,
+      "AtributosIniciales": [
+        { "NombreAtributo": "Arcano", "CarasDado": 8 },
+        { "NombreAtributo": "Destreza", "CarasDado": 6 },
+        { "NombreAtributo": "Fuerza", "CarasDado": 4 },
+        { "NombreAtributo": "Inteligencia", "CarasDado": 10 }
+      ]
+    }
+  ]
+}

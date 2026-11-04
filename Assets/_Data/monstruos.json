@@ -1,0 +1,11 @@
+{
+  "Monstruos": [
+    {
+      "ID": "MNST_HIBRIDO",
+      "Nombre": "Híbrido Profundo",
+      "VidaBase": 15,
+      "DefensaDC": 5,
+      "DanoAtaque": 2
+    }
+  ]
+}
