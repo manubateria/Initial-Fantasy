@@ -5,7 +5,9 @@
       "Nombre": "Híbrido Profundo",
       "VidaBase": 15,
       "DefensaDC": 5,
-      "DanoAtaque": 2
+      "DanoAtaque": 2,
+      "RangoAudicion": 3,
+      "TipoReposo": 1
     }
   ]
 }

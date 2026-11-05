@@ -58,6 +58,9 @@ public class EnemigoDTO
     public int VidaBase;
     public int DefensaDC;
     public int DanoAtaque;
+    // NUEVO: Datos para leer desde el JSON
+    public int RangoAudicion;
+    public int TipoReposo; // 0 para Acechar, 1 para Deambular
 }
 
 [System.Serializable]

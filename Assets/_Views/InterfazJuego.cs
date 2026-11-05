@@ -7,18 +7,47 @@ public class InterfazJuego : MonoBehaviour
     public TextMeshProUGUI textoPantalla;
     public TextMeshProUGUI TextoResultado;
 
-   public void MostrarDatos(Personaje pj)
+    public void MostrarDatos(Personaje pj)
     {
         string textoFinal = $"FICHA: {pj.Nombre}\n";
-        
+        string estadoTexto = pj.EstaMuerto ? "<color=red>MUERTO</color>" : pj.EstadoPsicologico.ToString().ToUpper();
+        textoFinal += $"ESTADO: {estadoTexto}\n";
+
         if (pj.NodoActual != null)
         {
             textoFinal += $"UBICACIÓN: {pj.NodoActual.Nombre}\n";
+
+            // --- NUEVO: RENDERIZAR ESTADOS DEL ENTORNO ---
+            if (pj.NodoActual.Estados.Count > 0)
+            {
+                textoFinal += "PELIGROS EN SALA: ";
+                foreach (EstadoEntorno est in pj.NodoActual.Estados)
+                {
+                    textoFinal += $"<color=orange>[{est.ToString().ToUpper()}]</color> ";
+                }
+                textoFinal += "\n";
+            }
+            // ----------------
+
+            // --- NUEVO: NIEBLA DE GUERRA EN CONEXIONES ---
+            textoFinal += "CONEXIONES:\n";
+            foreach (Nodo n in pj.NodoActual.Adyacentes)
+            {
+                if (n.Descubierto)
+                {
+                    textoFinal += $"> {n.Nombre}\n";
+                }
+                else
+                {
+                    textoFinal += $"> ??? (Inexplorado)\n";
+                }
+            }
+            textoFinal += "--------------------\n";
         }
-        
-        textoFinal += $"VIDA: {pj.VidaActual} / {pj.VidaMaxima}\n"; 
-        textoFinal += $"ACCIONES: {pj.AccionesActuales} / {pj.AccionesMaximas}\n"; 
-        
+
+        textoFinal += $"VIDA: {pj.VidaActual} / {pj.VidaMaxima}\n";
+        textoFinal += $"ACCIONES: {pj.AccionesActuales} / {pj.AccionesMaximas}\n";
+
         if (pj.Inventario.ContainsKey(SlotEquipamiento.ManoDerecha))
         {
             Item armaEquipada = pj.Inventario[SlotEquipamiento.ManoDerecha];
@@ -29,7 +58,7 @@ public class InterfazJuego : MonoBehaviour
             textoFinal += "MANO DCHA: Vacía (Puños)\n";
         }
 
-        // --- NUEVO: MOSTRAR EQUIPAMIENTO ADICIONAL (RELIQUIAS, CHALECOS, ETC.) ---
+        // --- MOSTRAR EQUIPAMIENTO ADICIONAL (RELIQUIAS, CHALECOS, ETC.) ---
         if (pj.EquipamientoAdicional != null && pj.EquipamientoAdicional.Count > 0)
         {
             textoFinal += "EQUIPO Y RELIQUIAS:\n";
@@ -45,8 +74,8 @@ public class InterfazJuego : MonoBehaviour
         // -------------------------------------------------------------------------
 
         textoFinal += "--------------------\n";
-        
-        // --- AQUÍ ESTÁ EL BLOQUE QUE FALTABA PARA MOSTRAR LOS POIs ---
+
+        // --- BLOQUE DE LOS POIs ---
         if (pj.NodoActual != null && pj.NodoActual.PuntosDeInteres != null && pj.NodoActual.PuntosDeInteres.Count > 0)
         {
             textoFinal += "PUNTOS DE INTERÉS:\n";
@@ -61,16 +90,13 @@ public class InterfazJuego : MonoBehaviour
         // -------------------------------------------------------------
 
         textoFinal += "ATRIBUTOS:\n";
-
-        foreach (KeyValuePair<string, TipoDado> atributo in pj.Atributos) 
+        foreach (KeyValuePair<string, TipoDado> atributo in pj.Atributos)
         {
             textoFinal += $"> {atributo.Key}: {atributo.Value}\n";
         }
 
         textoPantalla.text = textoFinal;
     }
-
-
 
     public void MostrarRegistroCombate(string mensaje)
     {
