@@ -1,0 +1,79 @@
+{
+  "Eventos": [
+    {
+      "ID": "EV_ALTAR",
+      "Titulo": "El Altar Impío",
+      "IDPaginaInicial": "PAG_1",
+      "Paginas": [
+        {
+          "IDPagina": "PAG_1",
+          "TextoDescriptivo": "En el centro de la sala encuentras un altar manchado de sangre seca. Sobre él descansa un tomo encuadernado en piel humana que parece susurrar tu nombre.",
+          "Opciones": [
+            {
+              "TextoBoton": "Intentar descifrar los susurros.",
+              "RequiereAtributo": "",
+              "NivelDadoRequerido": 0,
+              "RequiereItem": "",
+              "AtributoTirada": "Inteligencia",
+              "DificultadDC": 7,
+              "ModificadorVida": 0,
+              "ModificadorVidaMaxima": 0,
+              "GeneraRuido": 0,
+              "EntregaItem": "",
+              "IDPaginaDestino": "PAG_2",
+              "TextoResultado": "Las palabras resuenan en tu mente. El tomo se abre solo..."
+            },
+            {
+              "TextoBoton": "Destrozar el altar a patadas.",
+              "RequiereAtributo": "",
+              "NivelDadoRequerido": 0,
+              "RequiereItem": "",
+              "AtributoTirada": "Fuerza",
+              "DificultadDC": 5,
+              "ModificadorVida": 0,
+              "ModificadorVidaMaxima": 0,
+              "GeneraRuido": 4,
+              "EntregaItem": "UTL_AMULETO",
+              "IDPaginaDestino": "",
+              "TextoResultado": "Haces añicos la piedra. El estruendo atrae miradas indeseadas (Ruido +4), pero encuentras algo entre los escombros."
+            },
+            {
+              "TextoBoton": "Ignorarlo y seguir caminando.",
+              "RequiereAtributo": "",
+              "NivelDadoRequerido": 0,
+              "RequiereItem": "",
+              "AtributoTirada": "",
+              "DificultadDC": 0,
+              "ModificadorVida": 0,
+              "ModificadorVidaMaxima": 0,
+              "GeneraRuido": 0,
+              "EntregaItem": "",
+              "IDPaginaDestino": "",
+              "TextoResultado": "Decides que hay secretos que es mejor no desenterrar."
+            }
+          ]
+        },
+        {
+          "IDPagina": "PAG_2",
+          "TextoDescriptivo": "El libro revela verdades cósmicas insoportables. Comprendes los planos del edificio, pero sientes cómo el terror desgarra tu mente.",
+          "Opciones": [
+            {
+              "TextoBoton": "Aceptar el conocimiento maldito.",
+              "RequiereAtributo": "",
+              "NivelDadoRequerido": 0,
+              "RequiereItem": "",
+              "AtributoTirada": "",
+              "DificultadDC": 0,
+              "ModificadorVida": -6,
+              "ModificadorVidaMaxima": 0,
+              "GeneraRuido": 0,
+              "EntregaItem": "KEY_PLANOS",
+              "IDPaginaDestino": "",
+              "TextoResultado": "La sangre brota de tu nariz (-6 PV). Estás gravemente herido, pero ahora tienes los Planos."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,41 @@
+{
+  "NodoInicialID": "NOD_PASILLO",
+  "Nodos": [
+    {
+      "ID": "NOD_PASILLO",
+      "Nombre": "Pasillo Oscuro",
+      "Estados": [0],
+      "Conexiones": ["NOD_BIBLIO"],
+      "PuntosInteres": [
+        {
+          "Nombre": "Altar Sangriento",
+          "Descripcion": "Un altar siniestro en medio del pasillo.",
+          "EsNarrativo": true,
+          "IDEventoNarrativo": "EV_ALTAR",
+          "AtributoRequerido": "",
+          "DificultadDC": 0,
+          "RecompensaTexto": "",
+          "ItemRecompensaID": ""
+        }
+      ]
+    },
+    {
+      "ID": "NOD_BIBLIO",
+      "Nombre": "Biblioteca Oculta",
+      "Estados": [1, 2],
+      "Conexiones": ["NOD_PASILLO"],
+      "PuntosInteres": [
+        {
+          "Nombre": "Caja Fuerte Oxidada",
+          "Descripcion": "Una caja fuerte empotrada.",
+          "EsNarrativo": false,
+          "IDEventoNarrativo": "",
+          "AtributoRequerido": "Destreza",
+          "DificultadDC": 5,
+          "RecompensaTexto": "¡Has forzado la cerradura y obtenido documentos!",
+          "ItemRecompensaID": "KEY_PLANOS"
+        }
+      ]
+    }
+  ]
+}

@@ -6,7 +6,8 @@ public enum FaseJuego
 {
     Mantenimiento,
     Jugadores,
-    Eventos
+    Eventos,
+    GameOver
 }
 
 public class GameManager : MonoBehaviour
@@ -18,41 +19,30 @@ public class GameManager : MonoBehaviour
     private List<Personaje> listaPersonajes = new List<Personaje>();
     private int indiceActual = 0;
     private List<Enemigo> listaEnemigos = new List<Enemigo>();
-
-    // NUEVO: Lista maestra del mapa para disipar el ruido global
     private List<Nodo> mapaNodos = new List<Nodo>();
-
     public FaseJuego faseActual;
 
     // --- BASES DE DATOS EN MEMORIA (JSON) ---
     private Dictionary<string, ItemDTO> catalogoItems = new Dictionary<string, ItemDTO>();
     private Dictionary<string, EnemigoDTO> catalogoEnemigos = new Dictionary<string, EnemigoDTO>();
+    private Dictionary<string, EventoNarrativoDTO> catalogoEventos = new Dictionary<string, EventoNarrativoDTO>();
 
+    // --- VARIABLES DEL SISTEMA NARRATIVO ---
+    private EventoNarrativoDTO eventoActivo = null;
+    private PaginaNarrativaDTO paginaActiva = null;
+
+    private Dictionary<string, Nodo> diccionarioNodos = new Dictionary<string, Nodo>(); // Para buscar nodos rápido por ID
     void Start()
     {
         CargarCatalogos();
 
-        // 1. CREACIÓN DEL MAPA (GRAFO ESPACIAL)
-        Nodo pasillo = new Nodo("Pasillo Oscuro");
-        pasillo.AnadirEstado(EstadoEntorno.Oscuro); // <--- AÑADE ESTA LÍNEA
-        Nodo biblioteca = new Nodo("Biblioteca Oculta");
-        biblioteca.AnadirEstado(EstadoEntorno.Ardiendo); // <--- AÑADE ESTA LÍNEA
-        biblioteca.AnadirEstado(EstadoEntorno.Inundado); // <--- Y ESTA (¡Fuego y agua!)
-        pasillo.ConectarCon(biblioteca);
-
-        mapaNodos.Add(pasillo);
-        mapaNodos.Add(biblioteca);
-
-        Item documentos = CrearItemDesdeCatalogo("KEY_PLANOS");
-        PuntoInteres cajaFuerte = new PuntoInteres(
-            "Caja Fuerte Oxidada",
-            "Una caja fuerte empotrada.",
-            "Destreza",
-            5,
-            "¡Has forzado la cerradura y obtenido documentos!",
-            documentos
-        );
-        biblioteca.AgregarPOI(cajaFuerte);
+        // 1. CREACIÓN DEL MAPA DESDE JSON
+        Nodo nodoSpawn = CargarMapaDesdeJSON();
+        if (nodoSpawn == null)
+        {
+            Debug.LogError("Error fatal: No se pudo cargar el mapa o el nodo inicial.");
+            return;
+        }
 
         // 2. LECTURA Y CREACIÓN DE PERSONAJES
         string rutaArchivo = Path.Combine(Application.dataPath, "_Data", "plantillas_personajes.json");
@@ -72,32 +62,79 @@ public class GameManager : MonoBehaviour
                 Item armaInicial = CrearItemDesdeCatalogo("WPN_REVOLVER");
                 if (armaInicial != null) nuevoPersonaje.EquiparItem(armaInicial);
 
-                nuevoPersonaje.EstablecerUbicacionInicial(pasillo);
+                nuevoPersonaje.EstablecerUbicacionInicial(nodoSpawn); // Aparecen en el NodoInicialID del JSON
                 listaPersonajes.Add(nuevoPersonaje);
             }
         }
 
-        if (listaPersonajes.Count > 0)
-        {
-            pantallaUI.MostrarDatos(listaPersonajes[0]);
-        }
+        if (listaPersonajes.Count > 0) pantallaUI.MostrarDatos(listaPersonajes[0]);
 
         // 3. GENERACIÓN DE ENEMIGOS
         if (catalogoEnemigos.ContainsKey("MNST_HIBRIDO"))
         {
             EnemigoDTO datos = catalogoEnemigos["MNST_HIBRIDO"];
 
-            // ACTUALIZADO: Le inyectamos la IA (Rango y Reposo) desde el JSON
             Enemigo monstruoA = new Enemigo($"{datos.Nombre} A", datos.VidaBase, datos.DefensaDC, datos.DanoAtaque, datos.RangoAudicion, (ComportamientoReposo)datos.TipoReposo);
-            monstruoA.EstablecerUbicacionInicial(pasillo);
+            monstruoA.EstablecerUbicacionInicial(diccionarioNodos["NOD_PASILLO"]);
             listaEnemigos.Add(monstruoA);
 
             Enemigo monstruoB = new Enemigo($"{datos.Nombre} B", datos.VidaBase, datos.DefensaDC, datos.DanoAtaque, datos.RangoAudicion, (ComportamientoReposo)datos.TipoReposo);
-            monstruoB.EstablecerUbicacionInicial(biblioteca);
+            monstruoB.EstablecerUbicacionInicial(diccionarioNodos["NOD_BIBLIO"]);
             listaEnemigos.Add(monstruoB);
         }
 
         CambiarFase(FaseJuego.Mantenimiento);
+    }
+
+    private Nodo CargarMapaDesdeJSON()
+    {
+        string rutaMapa = Path.Combine(Application.dataPath, "_Data", "mapa.json");
+        if (!File.Exists(rutaMapa)) return null;
+
+        MapaDTO mapaDTO = JsonUtility.FromJson<MapaDTO>(File.ReadAllText(rutaMapa));
+        diccionarioNodos.Clear();
+        mapaNodos.Clear();
+
+        // PRIMERA PASADA: Instanciar Nodos, Peligros y POIs
+        foreach (NodoDTO nDTO in mapaDTO.Nodos)
+        {
+            Nodo nuevoNodo = new Nodo(nDTO.Nombre);
+
+            foreach (int estado in nDTO.Estados) nuevoNodo.AnadirEstado((EstadoEntorno)estado);
+
+            foreach (POI_DTO poiDTO in nDTO.PuntosInteres)
+            {
+                PuntoInteres nuevoPOI;
+                if (poiDTO.EsNarrativo)
+                {
+                    nuevoPOI = new PuntoInteres(poiDTO.Nombre, poiDTO.Descripcion, poiDTO.IDEventoNarrativo);
+                }
+                else
+                {
+                    Item recompensa = string.IsNullOrEmpty(poiDTO.ItemRecompensaID) ? null : CrearItemDesdeCatalogo(poiDTO.ItemRecompensaID);
+                    nuevoPOI = new PuntoInteres(poiDTO.Nombre, poiDTO.Descripcion, poiDTO.AtributoRequerido, poiDTO.DificultadDC, poiDTO.RecompensaTexto, recompensa);
+                }
+                nuevoNodo.AgregarPOI(nuevoPOI);
+            }
+
+            diccionarioNodos.Add(nDTO.ID, nuevoNodo);
+            mapaNodos.Add(nuevoNodo);
+        }
+
+        // SEGUNDA PASADA: Conectar los nodos usando sus IDs
+        foreach (NodoDTO nDTO in mapaDTO.Nodos)
+        {
+            Nodo nodoActual = diccionarioNodos[nDTO.ID];
+            foreach (string idConexion in nDTO.Conexiones)
+            {
+                if (diccionarioNodos.ContainsKey(idConexion))
+                {
+                    nodoActual.ConectarCon(diccionarioNodos[idConexion]);
+                }
+            }
+        }
+
+        return diccionarioNodos.ContainsKey(mapaDTO.NodoInicialID) ? diccionarioNodos[mapaDTO.NodoInicialID] : null;
     }
 
     private void CargarCatalogos()
@@ -115,6 +152,13 @@ public class GameManager : MonoBehaviour
             CatalogoEnemigosDTO catMonstruos = JsonUtility.FromJson<CatalogoEnemigosDTO>(File.ReadAllText(rutaMonstruos));
             foreach (EnemigoDTO e in catMonstruos.Monstruos) { catalogoEnemigos[e.ID] = e; }
         }
+
+        string rutaEventos = Path.Combine(Application.dataPath, "_Data", "eventos.json");
+        if (File.Exists(rutaEventos))
+        {
+            CatalogoEventosDTO catEventos = JsonUtility.FromJson<CatalogoEventosDTO>(File.ReadAllText(rutaEventos));
+            foreach (EventoNarrativoDTO ev in catEventos.Eventos) { catalogoEventos[ev.ID] = ev; }
+        }
     }
 
     public Item CrearItemDesdeCatalogo(string id)
@@ -130,33 +174,76 @@ public class GameManager : MonoBehaviour
     // ==========================================
     // CEREBRO DEL JUEGO (CONTROL DE FASES)
     // ==========================================
+
+    private bool ComprobarGameOver()
+    {
+        // Comprueba si queda al menos un investigador con vida
+        foreach (Personaje pj in listaPersonajes)
+        {
+            if (!pj.EstaMuerto) return false;
+        }
+        return true; // Todos han muerto
+    }
     public void CambiarFase(FaseJuego nuevaFase)
     {
         faseActual = nuevaFase;
         switch (faseActual)
         {
             case FaseJuego.Mantenimiento:
-                pantallaUI.MostrarRegistroCombate("--- FASE DE MANTENIMIENTO ---\nRestaurando acciones y disipando ruido...");
+                string registroMantenimiento = "--- FASE DE MANTENIMIENTO ---\nRestaurando acciones y disipando ruido...\n";
 
-                // NUEVO: La acústica se asienta en el mapa
-                foreach (Nodo n in mapaNodos)
-                {
-                    n.DisiparRuido();
-                }
+                // 1. El entorno se asienta
+                foreach (Nodo n in mapaNodos) n.DisiparRuido();
 
+                // 2. Restauración y Peligros Ambientales
                 foreach (Personaje pj in listaPersonajes)
                 {
+                    if (pj.EstaMuerto) continue;
+
                     pj.RestaurarAcciones();
+
+                    // DAÑO POR ENTORNO: Si terminaste el turno en una sala peligrosa, pagas el precio
+                    if (pj.NodoActual.TieneEstado(EstadoEntorno.Ardiendo))
+                    {
+                        pj.RecibirDano(1);
+                        registroMantenimiento += $"<color=orange>¡{pj.Nombre} se quema entre las llamas!</color> (-1 PV)\n";
+                    }
+                    if (pj.NodoActual.TieneEstado(EstadoEntorno.Toxico))
+                    {
+                        pj.RecibirDano(1);
+                        registroMantenimiento += $"<color=green>¡{pj.Nombre} respira gas tóxico!</color> (-1 PV)\n";
+                    }
+                    if (pj.NodoActual.TieneEstado(EstadoEntorno.Inundado))
+                    {
+                        // Podríamos restar 1 Acción en lugar de vida si está inundado, etc.
+                    }
                 }
+
+                pantallaUI.MostrarRegistroCombate(registroMantenimiento);
                 pantallaUI.MostrarDatos(listaPersonajes[indiceActual]);
-                Invoke("PasarAJugadores", 1.5f);
+
+                // 3. Chequeo Crítico: ¿Sigue alguien con vida?
+                if (ComprobarGameOver())
+                {
+                    CambiarFase(FaseJuego.GameOver);
+                }
+                else
+                {
+                    Invoke("PasarAJugadores", 2.0f); // Damos 2 segundos para leer el daño antes de jugar
+                }
                 break;
+
             case FaseJuego.Jugadores:
                 pantallaUI.MostrarRegistroCombate("--- FASE DE JUGADORES ---\nEs tu turno. Elige tus acciones.");
                 break;
+
             case FaseJuego.Eventos:
                 pantallaUI.MostrarRegistroCombate("--- FASE DE EVENTOS ---\nLos monstruos actúan...");
                 EjecutarTurnoEnemigos();
+                break;
+
+            case FaseJuego.GameOver: // NUEVO
+                pantallaUI.MostrarRegistroCombate("<color=red>=== FIN DE LA PARTIDA ===</color>\nTodos los investigadores han muerto o sucumbido a la locura. La oscuridad prevalece.");
                 break;
         }
     }
@@ -165,7 +252,7 @@ public class GameManager : MonoBehaviour
     private void ReiniciarRonda() { CambiarFase(FaseJuego.Mantenimiento); }
 
     // ==========================================
-    // CONTROLES DE LA INTERFAZ (BOTONES)
+    // CONTROLES DE LA INTERFAZ (TÁCTICOS)
     // ==========================================
     public void SiguientePersonaje()
     {
@@ -183,12 +270,12 @@ public class GameManager : MonoBehaviour
 
     public void TerminarTurnoJugador()
     {
-        if (faseActual == FaseJuego.Jugadores) CambiarFase(FaseJuego.Eventos);
+        if (faseActual == FaseJuego.Jugadores && eventoActivo == null) CambiarFase(FaseJuego.Eventos);
     }
 
     public void TirarDadoPrueba()
     {
-        if (faseActual != FaseJuego.Jugadores) return;
+        if (faseActual != FaseJuego.Jugadores || eventoActivo != null) return;
         Personaje pjActual = listaPersonajes[indiceActual];
         if (pjActual.EstaMuerto) return;
 
@@ -228,14 +315,12 @@ public class GameManager : MonoBehaviour
 
     public void BotonMoverPrueba()
     {
-        if (faseActual != FaseJuego.Jugadores) return;
+        if (faseActual != FaseJuego.Jugadores || eventoActivo != null) return;
         Personaje pjActual = listaPersonajes[indiceActual];
         if (pjActual.EstaMuerto || pjActual.NodoActual.Adyacentes.Count == 0 || !pjActual.GastarAccion()) return;
 
         Nodo destino = pjActual.NodoActual.Adyacentes[0];
         pjActual.CambiarDeNodo(destino);
-
-        // NUEVO: Caminar apresuradamente genera un poco de ruido
         destino.GenerarRuido(1);
 
         pantallaUI.MostrarRegistroCombate($"{pjActual.Nombre} camina hacia: {destino.Nombre} (Genera 1 Ruido).");
@@ -244,40 +329,175 @@ public class GameManager : MonoBehaviour
 
     public void BotonInteractuarPrueba()
     {
-        if (faseActual != FaseJuego.Jugadores) return;
+        if (faseActual != FaseJuego.Jugadores || eventoActivo != null) return;
         Personaje pjActual = listaPersonajes[indiceActual];
         if (pjActual.EstaMuerto) return;
 
+        // Buscamos si hay algo con lo que interactuar en esta sala
         PuntoInteres poiActual = null;
         foreach (var p in pjActual.NodoActual.PuntosDeInteres)
         {
             if (!p.YaInteractuado) { poiActual = p; break; }
         }
 
-        if (poiActual == null || !pjActual.GastarAccion()) return;
+        if (poiActual == null)
+        {
+            pantallaUI.MostrarRegistroCombate("No hay nada de interés aquí.");
+            return;
+        }
 
-        int resultadoTirada = pjActual.RealizarTirada(poiActual.AtributoRequerido);
-        string registro = $"{pjActual.Nombre} investiga '{poiActual.Nombre}'...\n";
-
-        if (resultadoTirada >= poiActual.DificultadDC)
+        // BIFURCACIÓN: ¿Es un evento de historia o una prueba mecánica rápida?
+        if (poiActual.EsNarrativo)
         {
             poiActual.MarcarComoInteractuado();
-            registro += $"<color=green>¡ÉXITO!</color> {poiActual.RecompensaTexto}";
-            Item botin = poiActual.EntregarObjeto();
-            if (botin != null) pjActual.EquiparItem(botin);
+            IniciarEventoNarrativo(poiActual.IDEventoNarrativo);
         }
         else
         {
-            // NUEVO: Fallar una prueba de destreza o fuerza provoca mucho ruido
-            pjActual.NodoActual.GenerarRuido(3);
-            registro += $"<color=red>¡FALLO!</color> Provocas un gran estruendo al intentarlo (Genera 3 Ruido).";
+            if (!pjActual.GastarAccion()) return;
+
+            int resultadoTirada = pjActual.RealizarTirada(poiActual.AtributoRequerido);
+            string registro = $"{pjActual.Nombre} investiga '{poiActual.Nombre}'...\n";
+
+            if (resultadoTirada >= poiActual.DificultadDC)
+            {
+                poiActual.MarcarComoInteractuado();
+                registro += $"<color=green>¡ÉXITO!</color> {poiActual.RecompensaTexto}";
+                Item botin = poiActual.EntregarObjeto();
+                if (botin != null) pjActual.EquiparItem(botin);
+            }
+            else
+            {
+                pjActual.NodoActual.GenerarRuido(3);
+                registro += $"<color=red>¡FALLO!</color> Provocas un gran estruendo al intentarlo (Genera 3 Ruido).";
+            }
+            pantallaUI.MostrarRegistroCombate(registro);
+            pantallaUI.MostrarDatos(pjActual);
         }
-        pantallaUI.MostrarRegistroCombate(registro);
-        pantallaUI.MostrarDatos(pjActual);
+    }
+
+        // ==========================================
+        // SISTEMA NARRATIVO Y TECLADO
+        // ==========================================
+        void Update()
+        {
+            // Solo escuchamos el teclado si hay un evento en curso
+            if (eventoActivo != null && paginaActiva != null)
+            {
+                // Opción 1 (Teclas 1 superior o 1 Numpad)
+                if ((Input.GetKeyDown(KeyCode.Alpha1) || Input.GetKeyDown(KeyCode.Keypad1)) && paginaActiva.Opciones.Count >= 1)
+                    ProcesarOpcionNarrativa(paginaActiva.Opciones[0], eventoActivo.ID);
+
+                // Opción 2 (Teclas 2 superior o 2 Numpad)
+                if ((Input.GetKeyDown(KeyCode.Alpha2) || Input.GetKeyDown(KeyCode.Keypad2)) && paginaActiva.Opciones.Count >= 2)
+                    ProcesarOpcionNarrativa(paginaActiva.Opciones[1], eventoActivo.ID);
+
+                // Opción 3 (Teclas 3 superior o 3 Numpad)
+                if ((Input.GetKeyDown(KeyCode.Alpha3) || Input.GetKeyDown(KeyCode.Keypad3)) && paginaActiva.Opciones.Count >= 3)
+                    ProcesarOpcionNarrativa(paginaActiva.Opciones[2], eventoActivo.ID);
+            }
+        }
+    
+
+    public void IniciarEventoNarrativo(string idEvento)
+    {
+        if (faseActual != FaseJuego.Jugadores) return;
+        Personaje pjActual = listaPersonajes[indiceActual];
+        if (pjActual.EstaMuerto) return;
+
+        if (!catalogoEventos.ContainsKey(idEvento)) return;
+
+        EventoNarrativoDTO evento = catalogoEventos[idEvento];
+        PaginaNarrativaDTO paginaInicial = evento.Paginas.Find(p => p.IDPagina == evento.IDPaginaInicial);
+
+        if (paginaInicial != null)
+        {
+            eventoActivo = evento;
+            paginaActiva = paginaInicial;
+            pantallaUI.MostrarPaginaNarrativa(pjActual, evento.Titulo, paginaInicial, idEvento);
+        }
+    }
+
+    public void ProcesarOpcionNarrativa(OpcionNarrativaDTO opcionElegida, string idEventoActual)
+    {
+        Personaje pjActual = listaPersonajes[indiceActual];
+        string registro = "";
+
+        if (!string.IsNullOrEmpty(opcionElegida.RequiereAtributo))
+        {
+            if (!pjActual.Atributos.ContainsKey(opcionElegida.RequiereAtributo) || (int)pjActual.Atributos[opcionElegida.RequiereAtributo] < opcionElegida.NivelDadoRequerido)
+            {
+                pantallaUI.MostrarRegistroCombate($"<color=grey>Opción bloqueada. Necesitas d{opcionElegida.NivelDadoRequerido} en {opcionElegida.RequiereAtributo}.</color>");
+                return;
+            }
+        }
+
+        bool exito = true;
+        if (!string.IsNullOrEmpty(opcionElegida.AtributoTirada) && opcionElegida.DificultadDC > 0)
+        {
+            if (!pjActual.GastarAccion())
+            {
+                pantallaUI.MostrarRegistroCombate("<color=red>¡Sin energía!</color> No puedes realizar esta acción.");
+                return;
+            }
+
+            int resultado = pjActual.RealizarTirada(opcionElegida.AtributoTirada);
+            registro += $"Tirada de {opcionElegida.AtributoTirada}: {resultado} (DC {opcionElegida.DificultadDC})\n";
+
+            if (resultado < opcionElegida.DificultadDC)
+            {
+                exito = false;
+                registro += $"<color=red>¡FALLO!</color> No consigues tu objetivo.\n";
+            }
+            else
+            {
+                registro += $"<color=green>¡ÉXITO!</color>\n";
+            }
+        }
+
+        if (exito)
+        {
+            registro += opcionElegida.TextoResultado + "\n";
+
+            if (opcionElegida.ModificadorVida < 0) pjActual.RecibirDano(Mathf.Abs(opcionElegida.ModificadorVida));
+            if (opcionElegida.GeneraRuido > 0) pjActual.NodoActual.GenerarRuido(opcionElegida.GeneraRuido);
+
+            if (!string.IsNullOrEmpty(opcionElegida.EntregaItem))
+            {
+                Item botin = CrearItemDesdeCatalogo(opcionElegida.EntregaItem);
+                if (botin != null) pjActual.EquiparItem(botin);
+            }
+
+            if (string.IsNullOrEmpty(opcionElegida.IDPaginaDestino))
+            {
+                eventoActivo = null;
+                paginaActiva = null;
+                registro += "\n<color=yellow>--- FIN DEL EVENTO ---</color>";
+                pantallaUI.MostrarRegistroCombate(registro);
+                pantallaUI.MostrarDatos(pjActual);
+            }
+            else
+            {
+                // Aquí nacen las variables
+                EventoNarrativoDTO eventoActual = catalogoEventos[idEventoActual];
+                PaginaNarrativaDTO siguientePagina = eventoActual.Paginas.Find(p => p.IDPagina == opcionElegida.IDPaginaDestino);
+                paginaActiva = siguientePagina;
+
+                pantallaUI.MostrarRegistroCombate(registro);
+
+                // Y aquí las usamos junto con idEventoActual
+                pantallaUI.MostrarPaginaNarrativa(pjActual, eventoActual.Titulo, siguientePagina, idEventoActual);
+            }
+        }
+        else
+        {
+            pantallaUI.MostrarRegistroCombate(registro);
+            pantallaUI.MostrarPaginaNarrativa(pjActual, eventoActivo.Titulo, paginaActiva, idEventoActual);
+        }
     }
 
     // ==========================================
-    // INTELIGENCIA ARTIFICIAL (RADARES Y PATHFINDING)
+    // INTELIGENCIA ARTIFICIAL (RADARES Y PATHFINDING BFS)
     // ==========================================
     private Nodo CalcularSiguientePasoHaciaRuido(Nodo inicio, int rangoMaximo)
     {
@@ -290,7 +510,6 @@ public class GameManager : MonoBehaviour
         distancias[inicio] = 0;
         padres[inicio] = null;
 
-        // Propagación de onda (Búsqueda en Anchura)
         while (cola.Count > 0)
         {
             Nodo actual = cola.Dequeue();
@@ -312,9 +531,8 @@ public class GameManager : MonoBehaviour
             }
         }
 
-        if (nodosConRuido.Count == 0) return null; // Nadie hizo ruido
+        if (nodosConRuido.Count == 0) return null;
 
-        // Criterio de prioridad: Máximo nivel de ruido. En caso de empate, el más cercano.
         Nodo objetivo = null;
         int maxRuido = -1;
         int minDistancia = int.MaxValue;
@@ -331,12 +549,8 @@ public class GameManager : MonoBehaviour
 
         if (objetivo == null || objetivo == inicio) return null;
 
-        // Reconstrucción del camino hacia atrás para saber cuál es el primer paso desde nuestro origen
         Nodo paso = objetivo;
-        while (padres[paso] != inicio)
-        {
-            paso = padres[paso];
-        }
+        while (padres[paso] != inicio) paso = padres[paso];
 
         return paso;
     }
@@ -356,19 +570,16 @@ public class GameManager : MonoBehaviour
 
             if (pjActual.NodoActual == monstruo.NodoActual)
             {
-                // ESTADO 1: ATACAR (Prioridad Máxima)
                 pjActual.RecibirDano(monstruo.DanoAtaque);
                 registroFase += $"El {monstruo.Nombre} ataca: -{monstruo.DanoAtaque} PV.\n";
             }
             else if (monstruo.NodoActual.Adyacentes.Contains(pjActual.NodoActual))
             {
-                // ESTADO 2: PERSEGUIR (Visión directa en la habitación de al lado)
                 monstruo.CambiarDeNodo(pjActual.NodoActual);
                 registroFase += $"¡El {monstruo.Nombre} ha entrado en la sala!\n";
             }
             else
             {
-                // ESTADO 3: RASTREAR RUIDO (Algoritmo BFS)
                 Nodo rastro = CalcularSiguientePasoHaciaRuido(monstruo.NodoActual, monstruo.RangoAudicion);
 
                 if (rastro != null)
@@ -378,7 +589,6 @@ public class GameManager : MonoBehaviour
                 }
                 else
                 {
-                    // ESTADO 4: REPOSO
                     if (monstruo.Reposo == ComportamientoReposo.Deambular && monstruo.NodoActual.Adyacentes.Count > 0)
                     {
                         int rnd = Random.Range(0, monstruo.NodoActual.Adyacentes.Count);
